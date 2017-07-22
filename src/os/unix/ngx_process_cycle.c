@@ -283,7 +283,50 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
     }
 }
 
+#if (NGX_HAVE_FSTACK)
+#include "ff_api.h"
+static int
+ngx_single_process_cycle_loop(void *arg)
+{
+    ngx_cycle_t *cycle = (ngx_cycle_t *)arg;
 
+    ngx_log_debug0(NGX_LOG_DEBUG_EVENT, cycle->log, 0, "worker cycle");
+    
+    ngx_process_events_and_timers(cycle);
+    
+    if (ngx_terminate || ngx_quit) {
+        ngx_uint_t i;
+        for (i = 0; cycle->modules[i]; i++) {
+            if (cycle->modules[i]->exit_process) {
+                cycle->modules[i]->exit_process(cycle);
+            }
+        }
+    
+        ngx_master_process_exit(cycle);
+    }
+
+    if (ngx_reconfigure) {
+        ngx_reconfigure = 0;
+        ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "reconfiguring");
+    
+        cycle = ngx_init_cycle(cycle);
+        if (cycle == NULL) {
+            cycle = (ngx_cycle_t *) ngx_cycle;
+            return 0;
+        }
+    
+        ngx_cycle = cycle;
+    }
+
+    if (ngx_reopen) {
+        ngx_reopen = 0;
+        ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "reopening logs");
+        ngx_reopen_files(cycle, (ngx_uid_t) -1);
+    }
+
+    return 0;
+}
+#endif
 void
 ngx_single_process_cycle(ngx_cycle_t *cycle)
 {
@@ -303,6 +346,9 @@ ngx_single_process_cycle(ngx_cycle_t *cycle)
         }
     }
 
+#if (NGX_HAVE_FSTACK)
+    ff_run(ngx_single_process_cycle_loop, (void *)cycle);
+#else
     for ( ;; ) {
         ngx_log_debug0(NGX_LOG_DEBUG_EVENT, cycle->log, 0, "worker cycle");
 
@@ -313,24 +359,24 @@ ngx_single_process_cycle(ngx_cycle_t *cycle)
             for (i = 0; cycle->modules[i]; i++) {
                 if (cycle->modules[i]->exit_process) {
                     cycle->modules[i]->exit_process(cycle);
-                }
-            }
+                }       
+            }       
 
             ngx_master_process_exit(cycle);
-        }
+        }       
 
         if (ngx_reconfigure) {
             ngx_reconfigure = 0;
             ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "reconfiguring");
 
             cycle = ngx_init_cycle(cycle);
-            if (cycle == NULL) {
+            if (cycle == NULL) { 
                 cycle = (ngx_cycle_t *) ngx_cycle;
                 continue;
-            }
+            }       
 
             ngx_cycle = cycle;
-        }
+        }       
 
         if (ngx_reopen) {
             ngx_reopen = 0;
@@ -338,6 +384,7 @@ ngx_single_process_cycle(ngx_cycle_t *cycle)
             ngx_reopen_files(cycle, (ngx_uid_t) -1);
         }
     }
+#endif
 }
 
 

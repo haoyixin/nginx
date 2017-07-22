@@ -50,6 +50,15 @@ static ngx_event_t     notify_event;
 static struct kevent   notify_kev;
 #endif
 
+#if (NGX_HAVE_FSTACK)
+#define FF_FD_BITS 16
+#define CHK_FD_BIT(fd)          (fd & (1 << FF_FD_BITS))
+#define CLR_FD_BIT(fd)          (fd & ~(1 << FF_FD_BITS))
+
+extern int kqueue(void);
+extern int kevent(int kq, const struct kevent *changelist, int nchanges, 
+    struct kevent *eventlist, int nevents, const struct timespec *timeout);
+#endif
 
 static ngx_str_t      kqueue_name = ngx_string("kqueue");
 
@@ -421,7 +430,15 @@ ngx_kqueue_set_event(ngx_event_t *ev, ngx_int_t filter, ngx_uint_t flags)
 
     kev = &change_list[nchanges];
 
+#if (NGX_HAVE_FSTACK)
+    ngx_socket_t fd = c->fd;
+    if (CHK_FD_BIT(fd))
+        fd = CLR_FD_BIT(fd);
+
+    kev->ident = fd;
+#else
     kev->ident = c->fd;
+#endif
     kev->filter = (short) filter;
     kev->flags = (u_short) flags;
     kev->udata = NGX_KQUEUE_UDATA_T ((uintptr_t) ev | ev->instance);
@@ -460,7 +477,6 @@ ngx_kqueue_set_event(ngx_event_t *ev, ngx_int_t filter, ngx_uint_t flags)
         ts.tv_nsec = 0;
 
         ngx_log_debug0(NGX_LOG_DEBUG_EVENT, ev->log, 0, "kevent flush");
-
         if (kevent(ngx_kqueue, change_list, (int) nchanges, NULL, 0, &ts)
             == -1)
         {
@@ -563,6 +579,9 @@ ngx_kqueue_process_events(ngx_cycle_t *cycle, ngx_msec_t timer,
     }
 
     if (events == 0) {
+#if (NGX_HAVE_FSTACK)
+        return NGX_OK;
+#else
         if (timer != NGX_TIMER_INFINITE) {
             return NGX_OK;
         }
@@ -570,10 +589,13 @@ ngx_kqueue_process_events(ngx_cycle_t *cycle, ngx_msec_t timer,
         ngx_log_error(NGX_LOG_ALERT, cycle->log, 0,
                       "kevent() returned no events without timeout");
         return NGX_ERROR;
+#endif
     }
 
     for (i = 0; i < events; i++) {
-
+#if (NGX_HAVE_FSTACK)
+        event_list[i].ident |= 1 << FF_FD_BITS;
+#endif
         ngx_kqueue_dump_event(cycle->log, &event_list[i]);
 
         if (event_list[i].flags & EV_ERROR) {

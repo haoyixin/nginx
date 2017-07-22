@@ -76,7 +76,7 @@ struct ngx_event_s {
 
     unsigned         cancelable:1;
 
-#if (NGX_HAVE_KQUEUE)
+#if (NGX_HAVE_KQUEUE) || (NGX_HAVE_FSTACK)
     unsigned         kq_vnode:1;
 
     /* the pending errno reported by kqueue */
@@ -101,7 +101,7 @@ struct ngx_event_s {
      *   accept:     1 if accept many, 0 otherwise
      */
 
-#if (NGX_HAVE_KQUEUE) || (NGX_HAVE_IOCP)
+#if (NGX_HAVE_KQUEUE) || (NGX_HAVE_IOCP) || (NGX_HAVE_FSTACK)
     int              available;
 #else
     unsigned         available:1;
@@ -313,7 +313,7 @@ extern ngx_uint_t            ngx_use_epoll_rdhup;
 #endif
 
 
-#if (NGX_HAVE_KQUEUE)
+#if (NGX_HAVE_KQUEUE) || (NGX_HAVE_FSTACK)
 
 #define NGX_READ_EVENT     EVFILT_READ
 #define NGX_WRITE_EVENT    EVFILT_WRITE

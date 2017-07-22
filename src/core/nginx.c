@@ -30,6 +30,9 @@ static char *ngx_load_module(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 static void ngx_unload_module(void *data);
 #endif
 
+#if (NGX_HAVE_FSTACK)
+void ff_mod_init(int argc, char * const *argv);
+#endif
 
 static ngx_conf_enum_t  ngx_debug_points[] = {
     { ngx_string("stop"), NGX_DEBUG_POINTS_STOP },
@@ -194,13 +197,22 @@ main(int argc, char *const *argv)
     ngx_conf_dump_t  *cd;
     ngx_core_conf_t  *ccf;
 
+#if (NGX_HAVE_FSTACK)
+    int ac = 1;
+    char *p = "nginx";
+    ff_mod_init(argc, argv);
+#endif
     ngx_debug_init();
 
     if (ngx_strerror_init() != NGX_OK) {
         return 1;
     }
 
+#if (NGX_HAVE_FSTACK)
+    if (ngx_get_options(ac, &p) != NGX_OK) {
+#else
     if (ngx_get_options(argc, argv) != NGX_OK) {
+#endif
         return 1;
     }
 
@@ -361,12 +373,16 @@ main(int argc, char *const *argv)
 
     ngx_use_stderr = 0;
 
+#if (NGX_HAVE_FSTACK)
+    ngx_single_process_cycle(cycle);
+#else
     if (ngx_process == NGX_PROCESS_SINGLE) {
         ngx_single_process_cycle(cycle);
 
     } else {
         ngx_master_process_cycle(cycle);
     }
+#endif
 
     return 0;
 }

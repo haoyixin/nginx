@@ -1409,7 +1409,7 @@ ngx_stream_proxy_test_connect(ngx_connection_t *c)
     int        err;
     socklen_t  len;
 
-#if (NGX_HAVE_KQUEUE)
+#if (NGX_HAVE_KQUEUE) || (NGX_HAVE_FSTACK)
 
     if (ngx_event_flags & NGX_USE_KQUEUE_EVENT)  {
         err = c->write->kq_errno ? c->write->kq_errno : c->read->kq_errno;
